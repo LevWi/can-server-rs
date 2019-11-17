@@ -1,14 +1,59 @@
-use std::sync::Arc;
+use std::sync::{ Arc, Weak };
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{ self, JoinHandle};
+use std::collections::{ HashMap, HashSet };
+use std::time::{ Duration, Instant };
 
-pub struct Builder {
+type CanId = u8;
 
+// Can receivers combine its ???
+enum SubscribeType {
+    ByChange,
+    WaitAfterNew(Duration),
+    IfLost(Duration),
+    Periodic(Duration)
 }
+
+pub struct CanCache(HashMap<CanId, (Instant , [u8; 8])>);
+
+//pub struct Subscribers(HashMap<CanId, HashMap<u32, Box<dyn FnMut(CanId, [u8])>>>);
+
+pub struct Subscribers(Vec<Box<dyn FnMut(CanId, [u8])>>);
 
 pub struct Server {
     work_flag : Arc<AtomicBool>,
-    jobs: Vec<JoinHandle<()>>,
+    subscribers : Arc<Subscribers>,
+    cache : CanCache,
+    jobs: ( JoinHandle<()>, JoinHandle<()>),
+}
+
+impl Server {
+    pub fn stop(self) {
+        self.work_flag.store(false, Ordering::Release);
+        self.jobs.0.join().unwrap();
+        self.jobs.1.join().unwrap();
+    }
+
+    pub fn subscribe(&mut self, can_id : CanId, sub_type : SubscribeType ) {
+        // TODO
+    }
+}
+
+
+#[test]
+fn check_subscriptions() {
+    use std::sync::mpsc::channel;
+
+    let mut t = 5;
+    // This send is always successful
+    {
+        let (tx, rx) = channel::<Box<dyn FnMut(u8)>>();
+        tx.send(Box::new( |x| { t += 1; } )).unwrap();
+    }
+}
+
+pub struct Builder {
+    //TODO
 }
 
 impl Builder {
@@ -26,7 +71,7 @@ impl Builder {
                 //TODO
             } 
 
-        } ).unwrap(); 
+        } ).unwrap();
 
         let work_flg = flag.clone();
         let sender = thread::Builder::new()
@@ -39,17 +84,6 @@ impl Builder {
 
         } ).unwrap();
 
-        Server { work_flag : flag, jobs : vec![listener, sender] }
-    }
-}
-
-impl Server {
-    pub fn stop(self) {
-        self.work_flag.store(false, Ordering::Release);
-        
-        for j in self.jobs.into_iter() {
-            j.join().unwrap();
-        }
-
+        Server { work_flag : flag, jobs : (listener, sender) }
     }
 }

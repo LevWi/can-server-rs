@@ -148,5 +148,5 @@ fn check_bytes_fields() {
     buf[4] = 0x40;
  
     let mut val = Field{  value : PrimValue(0u128), start_bit_pos: 31, bit_size : 8 };
-    //val.set_from(&buf);
+    //TODO
 }
