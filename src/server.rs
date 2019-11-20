@@ -3,8 +3,39 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{ self, JoinHandle};
 use std::collections::{ HashMap, HashSet };
 use std::time::{ Duration, Instant };
+use socketcan::*;
 
-type CanId = u8;
+type CanId = u32;
+
+enum CanType {
+    Periodic(Duration),
+    Event,
+    PeriodicEvent(Duration)
+}
+
+pub struct CanFrame {
+    can_id : CanId,
+    buf : [u8; 8],
+    time_stamp : Option<Instant>, // last received
+    can_type : CanType
+    // Callbacks ??
+}
+
+impl CanFrame {
+    pub fn is_valid(&self) -> bool {
+        match self.can_type {
+            CanType::Periodic(p) | CanType::PeriodicEvent(p) => {
+                if let Some(inst) = self.time_stamp {
+                    p > Instant::now() - inst
+                } else {
+                    false
+                }
+            }
+
+            CanType::Event => self.time_stamp.is_some()
+        }
+    }
+}
 
 // Can receivers combine its ???
 enum SubscribeType {
@@ -24,7 +55,7 @@ pub struct Server {
     work_flag : Arc<AtomicBool>,
     subscribers : Arc<Subscribers>,
     cache : CanCache,
-    jobs: ( JoinHandle<()>, JoinHandle<()>),
+    jobs: ( JoinHandle<()>, JoinHandle<()>), //TODO 2 threads = Worker with raw CANS and new data handler
 }
 
 impl Server {
